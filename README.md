@@ -1,6 +1,7 @@
 # jcs
 
 [![GoDev](https://img.shields.io/static/v1?label=godev&message=reference&color=00add8)][godev]
+[![GitHub Workflow Status](https://img.shields.io/github/workflow/status/ucarion/jcs/tests?label=tests&logo=github)](https://github.com/ucarion/jcs/actions)
 
 This package is a Golang implementation of [JSON Canonicalization Scheme
 ("JCS")][jcs], aka [RFC 8785][rfc]. This package complies with all test data
