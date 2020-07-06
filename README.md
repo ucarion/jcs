@@ -57,8 +57,8 @@ If you have an existing buffer you'd prefer to output to instead, use
 ```go
 var buf []byte
 
-// See note aboute error handling below
-buf = jcs.Append(buf, &input)
+// See note about error handling below
+buf, _ = jcs.Append(buf, &input)
 ```
 
 You can, of course, pass your own data structures to `Format` or `Append`, but
