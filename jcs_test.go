@@ -3,6 +3,7 @@ package jcs_test
 import (
 	"bufio"
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"math"
 	"os"
@@ -15,7 +16,41 @@ import (
 	"github.com/ucarion/jcs"
 )
 
-func TestCanonicalize(t *testing.T) {
+func ExampleFormat() {
+	input := `{"z": [1, 2, 3], "a": "<foo>" }`
+
+	var v interface{}
+	if err := json.Unmarshal([]byte(input), &v); err != nil {
+		panic(err)
+	}
+
+	// This is not going to output JCS canonical JSON, because of quirks in
+	// encoding/json's output format.
+	outNaive, _ := json.Marshal(v)
+	fmt.Println(string(outNaive))
+
+	out, _ := jcs.Format(v)
+	fmt.Println(out)
+	// Output:
+	// {"a":"\u003cfoo\u003e","z":[1,2,3]}
+	// {"a":"<foo>","z":[1,2,3]}
+}
+
+func TestAppend(t *testing.T) {
+	b := []byte{'x', 'y', 'z'}
+	b, err := jcs.Append(b, []interface{}{"foo"})
+	assert.NoError(t, err)
+	assert.Equal(t, []byte{'x', 'y', 'z', '[', '"', 'f', 'o', 'o', '"', ']'}, b)
+}
+
+func TestUnsupportedType(t *testing.T) {
+	// Note: this is a map[string]string, instead of the required
+	// map[string]interface{}.
+	_, err := jcs.Format(map[string]string{"foo": "bar"})
+	assert.Equal(t, err, jcs.ErrUnsupportedType)
+}
+
+func TestFormat(t *testing.T) {
 	files, err := ioutil.ReadDir("testdata/input")
 	assert.NoError(t, err)
 
@@ -30,15 +65,19 @@ func TestCanonicalize(t *testing.T) {
 			out, err := ioutil.ReadFile(filepath.Join("testdata/output", file.Name()))
 			assert.NoError(t, err)
 
-			assert.Equal(t, out, jcs.Canonicalize(in))
+			actual, err := jcs.Format(in)
+			assert.NoError(t, err)
+
+			assert.Equal(t, out, []byte(actual))
 		})
 	}
 }
 
-func TestCanonicalizeFloat(t *testing.T) {
+func TestFormatFloat(t *testing.T) {
 	testCases := []struct {
 		in  string
 		out string
+		err error
 	}{
 		{in: "0000000000000000", out: "0"},
 		{in: "8000000000000000", out: "0"},
@@ -47,8 +86,8 @@ func TestCanonicalizeFloat(t *testing.T) {
 		{in: "4340000000000000", out: "9007199254740992"},
 		{in: "c340000000000000", out: "-9007199254740992"},
 		{in: "4430000000000000", out: "295147905179352830000"},
-		{in: "7fffffffffffffff", out: ""},
-		{in: "7ff0000000000000", out: ""},
+		{in: "7fffffffffffffff", out: "", err: jcs.ErrNaN},
+		{in: "7ff0000000000000", out: "", err: jcs.ErrInf},
 		{in: "44b52d02c7e14af5", out: "9.999999999999997e+22"},
 		{in: "44b52d02c7e14af6", out: "1e+23"},
 		{in: "44b52d02c7e14af7", out: "1.0000000000000001e+23"},
@@ -68,18 +107,19 @@ func TestCanonicalizeFloat(t *testing.T) {
 
 	for _, tt := range testCases {
 		t.Run(tt.in, func(t *testing.T) {
-			testFloatC14N(t, tt.in, tt.out)
+			testFloatC14N(t, tt.in, tt.out, tt.err)
 		})
 	}
 }
 
-func TestCanonicalizeFloat100M(t *testing.T) {
-	f, err := os.Open("es6testfile100m.txt")
-	if os.IsNotExist(err) {
-		t.Skip("es6testfile100m.txt not present")
+func TestFormatFloat100M(t *testing.T) {
+	if os.Getenv("JCS_TEST_100M") != "1" {
+		t.Skip("JCS_TEST_100M not set to 1")
 	}
 
+	f, err := os.Open("es6testfile100m.txt")
 	assert.NoError(t, err)
+
 	defer f.Close()
 
 	i := 0
@@ -94,16 +134,17 @@ func TestCanonicalizeFloat100M(t *testing.T) {
 		line := scanner.Text()
 		sep := strings.IndexByte(line, ',')
 
-		testFloatC14N(t, line[:sep], line[sep+1:])
+		testFloatC14N(t, line[:sep], line[sep+1:], nil)
 	}
 }
 
-func testFloatC14N(t *testing.T, in string, out string) {
+func testFloatC14N(t *testing.T, in string, out string, outError error) {
 	inBits, err := strconv.ParseUint(in, 16, 64)
 	assert.NoError(t, err)
 
 	inFloat := math.Float64frombits(inBits)
 
-	actual := jcs.Canonicalize(inFloat)
-	assert.Equal(t, []byte(out), actual, "bad float for input: %v, want: %v, got: %v", in, out, string(actual))
+	actual, actualErr := jcs.Format(inFloat)
+	assert.Equal(t, outError, actualErr)
+	assert.Equal(t, out, actual, "bad float for input: %v, want: %v, got: %v", in, out, actual)
 }
