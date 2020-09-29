@@ -67,8 +67,8 @@ above.
 
 ## Error Handling
 
-See the GoDoc for more details, but note that `Append` and `Format` may return
-errors if any of the following are true:
+See the [documentation](https://pkg.go.dev/github.com/ucarion/jcs) for more details,
+but note that `Append` and `Format` may return errors if any of the following are true:
 
 * The inputted data contains types other than those listed in "Usage".
 * The inputted data contains `NaN`.
